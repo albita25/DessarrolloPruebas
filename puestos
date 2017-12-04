@@ -1,0 +1,329 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Configuration;
+using System.Collections.Specialized;
+using System.Data.SqlClient;
+
+namespace SPnuevo
+{
+    public partial class frmPuestos : Form
+    {
+        validacion v = new validacion();
+
+        public frmPuestos()
+        {
+            InitializeComponent();
+        }
+
+        private void frmPuestos_Load(object sender, EventArgs e)
+        {
+           
+            grid();
+            cargar();
+
+            this.txtactivo.Text = "1";
+
+            // metodo de hora extraer fecha y  hora del sistema
+            DateTime hoy = DateTime.Now;
+            this.lblfecha.Text = hoy.ToShortDateString();
+            this.lblhora.Text = hoy.ToShortTimeString();
+        }
+
+        // metodo para  cargar
+        void cargar()
+        {
+            this.grbPuestos.Enabled = false;
+            this.btnguardar.Enabled = false;
+            this.btncancelar.Enabled = false; ;
+            this.btnmodificar.Enabled = false;
+            this.btnnuevo.Enabled = true;
+            this.btnnuevo.Focus();
+        }
+
+        void nuevo()
+        {
+            this.grbPuestos.Enabled = true;
+            this.btnguardar.Enabled = true;
+            this.btncancelar.Enabled = true; ;
+            this.btnmodificar.Enabled = false;
+            this.btnnuevo.Enabled = false;
+            this.txtpuesto.Focus();
+            this.txtactivo.Text = "1";
+
+
+        }
+        void cancelar()
+        {
+            this.grbPuestos.Enabled = false;
+            this.btncancelar.Enabled = false;
+            this.btnmodificar.Enabled = false;
+            this.btnguardar.Enabled = false;
+            this.btnnuevo.Enabled = true;
+
+            this.txtpuesto.Clear();
+            this.txtactivo.Clear();
+        }
+
+        void actualizar()
+        {
+            this.grbPuestos.Enabled = true;
+            this.btncancelar.Enabled = true;
+            this.btnmodificar.Enabled = true;
+            this.btnguardar.Enabled = false;
+            this.btnnuevo.Enabled = false;
+            this.txtpuesto.Focus();
+        }
+
+        //-----------------------Metodo para llenar el datafridview-------------------
+        void grid()
+        {
+            string qry = "";
+            string cadenaconexion = ConfigurationManager.AppSettings.Get("cadenaconexion");
+            SqlConnection sqlCNX = new SqlConnection(cadenaconexion);
+            SqlCommand sqlCMD = new SqlCommand();
+
+
+            try
+            {
+                qry = "SELECT id_puesto as [ID puesto], puesto as Puesto, fecha_registro as [Fecha de registro], hora_registro as [Hora de registro], activo as Activo, CONVERT(nvarchar(50), id_usuario) as Login from puestos where activo=1";
+                sqlCMD.CommandText = qry;
+                sqlCMD.Connection = sqlCNX;
+                sqlCNX.Open();
+                SqlDataAdapter adapatador = new SqlDataAdapter(sqlCMD);
+                DataTable datos = new DataTable();
+                adapatador.Fill(datos);
+                sqlCNX.Close();
+
+                this.dgvPuestos.DataSource = datos;
+                this.dgvPuestos.Columns["ID puesto"].Width = 100;
+                this.dgvPuestos.Columns["Puesto"].Width = 150;
+                this.dgvPuestos.Columns["Fecha de registro"].Width = 100;
+                this.dgvPuestos.Columns["Hora de registro"].Width = 100;
+                this.dgvPuestos.Columns["Activo"].Width = 50;
+                
+
+                // Para aparesca el Login que modifico el puesto
+                for (int i = 0; i < dgvPuestos.Rows.Count; i++)
+                {
+                    string idU = dgvPuestos.Rows[i].Cells["Login"].Value.ToString();
+                   
+                    qry ="SELECT login FROM usuarios WHERE id_usuario = '" + idU + "'";
+                    sqlCMD.CommandText = qry;
+                    sqlCMD.Connection = sqlCNX;
+                    sqlCNX.Open();
+                    SqlDataReader sqlDR = null;
+                    sqlDR = sqlCMD.ExecuteReader();
+
+                    if (sqlDR.HasRows)
+                    {
+                        while (sqlDR.Read())
+                        {
+                            dgvPuestos.Rows[i].Cells["Login"].Value = sqlDR[0].ToString();
+                        }
+                    }
+                    sqlCNX.Close();
+
+                }
+
+
+            }
+            catch (SqlException ex)
+            {
+
+                MessageBox.Show("Erro al llenar el dataGridView", "Sistema de Inventario");
+                MessageBox.Show(ex.Message.ToString());
+            }
+        }
+
+        //-------------------------------BOTON NUEVO------------------------------
+        private void btnnuevo_Click(object sender, EventArgs e)
+        {
+            nuevo();
+        }
+        //-----------------------------BOTON GUARDAR-------------------------------
+        private void btnguardar_Click(object sender, EventArgs e)
+        {
+            if (txtpuesto.Text.Trim().Equals(""))
+            {
+                MessageBox.Show("No dejes espacios vacios", "Sistema de inventario");
+                return;
+            }
+
+            //variable para guardar la consulta
+            string qry = "";
+            // Variable para extraer la configuración del appconfig
+            string cadenaconexion = ConfigurationManager.AppSettings.Get("cadenaconexion");
+            // Variable para guardar la conexión tiposql
+            SqlConnection sqlCNX = new SqlConnection(cadenaconexion);
+            //Variable para guardar el objeto o comando
+            SqlCommand sqlCMD = new SqlCommand(); ;
+            
+
+            try
+            {
+                int idpuesto = Int16.Parse(this.dgvPuestos.CurrentRow.Cells["ID puesto"].Value.ToString());
+                qry = "SELECT puesto from puestos where puesto='" + this.txtpuesto.Text + "' ";
+                sqlCMD.CommandText = qry;
+                sqlCMD.Connection = sqlCNX;
+                SqlDataReader sqlDR = null;
+                sqlCNX.Open();
+                sqlDR = sqlCMD.ExecuteReader();
+
+                if (sqlDR.HasRows == true)
+                {
+                    MessageBox.Show("El puesto ya existe!", "Sistema de inventarios");
+                    this.txtpuesto.Clear();
+                    this.txtpuesto.Focus();
+                    sqlCNX.Close();
+                    return;
+
+                }
+
+                else
+                {
+                    sqlCNX.Close();
+                    DateTime hoy = DateTime.Now;
+                    this.lblfecha.Text = hoy.ToShortDateString();
+                    this.lblhora.Text = hoy.ToShortTimeString();
+
+                    qry = "INSERT INTO puestos (puesto, fecha_registro, hora_registro, activo, id_usuario) VALUES ('" + this.txtpuesto.Text + "', '" + hoy.ToString("yyyyMMdd") + "', '" + this.lblhora.Text + "', '" + this.txtactivo.Text + "', " + frmPrincipal.id_entrar + ")";
+
+                    sqlCMD.CommandText = qry;
+                    sqlCMD.Connection = sqlCNX;
+                    sqlCNX.Open();
+                    sqlCMD.ExecuteReader();
+                    sqlCNX.Close();
+
+                    MessageBox.Show("Regitro guardado!", "Sistema de inventario");
+
+                    cancelar();
+                    grid();
+                }
+
+            }
+            catch (SqlException ex)
+            {
+
+                MessageBox.Show("Error al insertar la persona", "Sistema de inventario");
+                MessageBox.Show(ex.Message.ToString());
+            }
+
+        }
+
+        //------------------------Botón modificar--------------------------------------------
+        private void btnmodificar_Click(object sender, EventArgs e)
+        {
+            if (txtpuesto.Text.Trim().Equals("")||txtactivo.Text.Trim().Equals(""))
+            {
+                MessageBox.Show("No dejes espacios vacios", "Sistema de inventarios");
+                return;
+            }
+
+            string qry = "";
+            string cadenaconexion = ConfigurationManager.AppSettings.Get("cadenaconexion");
+            SqlConnection sqlCNX = new SqlConnection(cadenaconexion);
+            SqlCommand sqlCMD = new SqlCommand();
+
+            try
+            {
+                
+                int idpuesto = Int16.Parse(this.dgvPuestos.CurrentRow.Cells["ID puesto"].Value.ToString());
+                qry = "SELECT puesto from puestos where puesto='" + this.txtpuesto.Text + "'  and id_puesto!="+idpuesto+ "  ";
+                sqlCMD.CommandText = qry;
+                sqlCMD.Connection = sqlCNX;
+                SqlDataReader sqlDR = null;
+                sqlCNX.Open();
+                sqlDR = sqlCMD.ExecuteReader();
+
+                if (sqlDR.HasRows == true)
+                {
+                    MessageBox.Show("El puesto ya existe!", "Sistema de inventarios");
+                    this.txtpuesto.Focus();
+                    sqlCNX.Close();
+                    return;
+
+                }
+
+                else
+                {
+                    sqlCNX.Close();
+                    qry = "UPDATE puestos SET puesto='" + this.txtpuesto.Text + "', activo='" + this.txtactivo.Text + "', id_usuario='" + frmPrincipal.id_entrar + "' where id_puesto='" + idpuesto + "' ";
+
+                    sqlCMD.CommandText = qry;
+                    sqlCMD.Connection = sqlCNX;
+                    sqlCNX.Open();
+                    sqlCMD.ExecuteReader();
+                    sqlCNX.Close();
+
+
+                    MessageBox.Show("Puesto modificado", "Sistema de inventarios");
+                    cancelar();
+                    grid();
+                }
+
+            }
+            catch (SqlException ex)
+            {
+
+                MessageBox.Show("Error al modificar una puesto", "Sistema de inventarios");
+                MessageBox.Show(ex.Message.ToString());
+            }
+
+        }
+
+        private void btncancelar_Click(object sender, EventArgs e)
+        {
+            cancelar();
+        }
+
+        private void dgvPuestos_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            
+            this.txtpuesto.Text = this.dgvPuestos.CurrentRow.Cells["Puesto"].Value.ToString();
+            this.txtactivo.Text = this.dgvPuestos.CurrentRow.Cells["Activo"].Value.ToString();
+            actualizar();
+        }
+
+        private void btninactivo_Click(object sender, EventArgs e)
+        {
+            this.Hide();
+            frmPuestosInactivos formulario = new frmPuestosInactivos();
+            formulario.Show();
+        }
+
+        private void txtactivo_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            //v.soloNumeros(e);
+
+            //Solo aceptamos números: 0,1
+            if (System.Text.RegularExpressions.Regex.IsMatch(txtactivo.Text, "[0-1]"))
+            {
+                //Tu codigo aquí
+            }
+            else
+            {
+                
+                MessageBox.Show("Solo admite 0 y 1", "Sistema de inventario");
+                this.txtactivo.Focus();
+                this.txtactivo.Clear();
+                return;
+
+            }
+        }
+
+        private void txtpuesto_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            v.soloLetras(e);
+        }
+   
+   
+
+    }
+}
